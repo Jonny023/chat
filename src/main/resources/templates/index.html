@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天</title>
+    <link rel="Bookmark" type="image/x-icon" href="${req.contextPath}/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="${req.contextPath}/favicon.ico" />
+    <link rel="shortcut icon" type="image/x-icon" href="${req.contextPath}/favicon.ico" />
+    <style>
+        .tips {
+            color: red;
+        }
+        body {
+            font-size: 14px;
+            font-family: "YaHei Monaco Hybird","Microsoft YaHei UI";
+        }
+        #conversation {
+            margin: 5px 0px 0px 5px;
+        }
+        #conversation div {
+            margin: 2px 0px 0px 5px;
+        }
+    </style>
+</head>
+<body>
+<p>欢迎您：${userId}，<a href="${req.contextPath}/logout">退出</a></p>
+<p id="time"></p>
+
+<input type="button" id="connect" value="连接">
+<input type="button" id="disconnect" disabled="disabled" value="断开连接">
+
+消息内容：<input type="text" id="content">
+发送给：<select id="to">
+    <option value="user1">user1</option>
+    <option value="user2">user2</option>
+    <option value="user3">user3</option>
+</select>
+<input type="button" value="点対点" id="send">
+<input type="button" value="广播" id="topic">
+<div id="conversation"></div>
+
+<script src="${req.contextPath}/webjars/jquery/jquery.min.js"></script>
+<script src="${req.contextPath}/webjars/sockjs-client/sockjs.min.js"></script>
+<script src="${req.contextPath}/webjars/stomp-websocket/stomp.min.js"></script>
+<script>
+    $(function () {
+
+        var base = "${req.contextPath}";
+        var userId = "${userId}";
+
+        //ie不支持
+        // Array.from($("#to").children()).forEach((o, i) =>{
+        //     if ($(o).val() == userId) {
+        //         $(o).remove();
+        //     }
+        // });
+        var options = $("#to").children();
+        for (var i = 0; i < 3; i++) {
+            if ($(options[i]).val() == userId) {
+                $(options[i]).remove();
+            }
+        }
+
+        var stompClient = null;
+
+        $("#connect").click(function () {
+            connect();
+        });
+
+        $("#disconnect").click(function () {
+            if (stompClient != null) {
+                stompClient.disconnect();
+            }
+            setConnected(false);
+        });
+
+        //发送点対点消息
+        $("#send").click(function () {
+            var data = {
+                to: $("#to").val(),
+                content: $("#content").val(),
+                mark: 1
+            };
+            $("#content").val('');
+            stompClient.send(base + "/chat", {}, JSON.stringify(data));
+            showChat(data);
+        });
+
+        //发送广播消息
+        $("#topic").click(function () {
+            var data = {
+                content: $("#content").val()
+            };
+            $("#content").val('');
+            stompClient.send(base + "/send/message", {}, JSON.stringify(data));
+        });
+
+        function connect() {
+            var socket = new SockJS(base + "/point");
+            stompClient = Stomp.over(socket);
+            stompClient.connect({}, function (result) {
+                setConnected(true);
+                //订阅系统推送广播
+                stompClient.subscribe(base + "/topic", function (res) {
+                    showMessage(JSON.parse(res.body));
+                });
+                //订阅用户发送的广播
+                stompClient.subscribe(base + "/message", function (res) {
+                    res = JSON.parse(res.body);
+                    res.tag = 1;
+                    showChat(res);
+                });
+                //订阅用户点対点信息
+                stompClient.subscribe(base + "/queue/" + userId + "/get", function (res) {
+                    res = JSON.parse(res.body);
+                    res.tag = 2;
+                    showChat(res);
+                });
+            });
+        }
+
+        function showChat(res) {
+            if (res.content) {
+                if (res.mark) {
+                    $("#conversation").append("<div><span style='color:green;font-size: 13px;'>我<i style='color:#f8b941;font-size: 12px'>(单聊)</i>发送给<i>" + res.to + "</i></span>：" + res.content + "</div>");
+                } else {
+                    if (res.from == userId) {
+                        if (res.tag && res.tag == 1) {
+                            $("#conversation").append("<div><span style='color:green;font-size: 13px;'>我<i style='color:#f8b941;font-size: 12px'>(群聊)</i></span>：" + res.content + "</div>");
+                        } else {
+                            $("#conversation").append("<div><span style='color:green;font-size: 13px;'>我<i style='color:#f8b941;font-size: 12px'>(单聊)</i></span>：" + res.content + "</div>");
+                        }
+                    } else {
+                        if (res.tag && res.tag == 1) {
+                            $("#conversation").append("<div><span style='color:#3b3535;font-size: 13px;'>" + res.from + "<i style='color:#f8b941;font-size: 12px'>(群聊)</i></span>：" + res.content + "</div>");
+                        } else {
+                            $("#conversation").append("<div><span style='color:#3b3535;font-size: 13px;'>" + res.from + "<i style='color:#f8b941;font-size: 12px'>(单聊)</i></span>：" + res.content + "</div>");
+                        }
+                    }
+                }
+            }
+        }
+
+        function showMessage(res) {
+            $("#time").text(res.content);
+        }
+
+        function setConnected(flag) {
+            $("#connect").prop("disabled", flag);
+            $("#disconnect").prop("disabled", !flag);
+            if (flag) {
+                $("#chat").show();
+            } else {
+                $("#chat").hide();
+            }
+        }
+    });
+
+</script>
+</body>
+</html>
