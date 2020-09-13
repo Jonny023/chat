@@ -9,3 +9,10 @@ org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFil
 ```bash
 nohup java -jar chat.jar & > log.txt
 ```
+
+# 用户，密码1
+```java
+user1
+user2
+user3
+```
